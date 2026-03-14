@@ -24,7 +24,14 @@ sudo chown $USER:staff /opt/workspace
 
 On Linux, replace `staff` with your group (usually your username or `users`).
 
-### 2. Build the container
+### 2. Install Docker (if you don't have it)
+
+- **Mac/Windows:** Download [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- **Linux:** Follow the [official install guide](https://docs.docker.com/engine/install/)
+
+Verify it's working: `docker --version`
+
+### 3. Build the container
 
 ```bash
 git clone https://github.com/jcdentonintheflesh/claude-cage.git
@@ -32,7 +39,7 @@ cd claude-cage
 docker build -t claude-cage .
 ```
 
-### 3. First run
+### 4. First run
 
 ```bash
 docker run -dit --name claude \
@@ -45,7 +52,7 @@ This starts the container in the background with two mounts:
 - `/opt/workspace` is your code, shared between your machine and the container
 - `claude-auth` is a Docker volume that stores your Claude login so you don't have to re-authenticate every time
 
-### 4. Launch Claude Code
+### 5. Launch Claude Code
 
 ```bash
 docker exec -it claude claude
@@ -53,7 +60,7 @@ docker exec -it claude claude
 
 You're now inside Claude Code, but it can only see `/opt/workspace`. Nothing else on your machine is accessible.
 
-### 5. Daily use
+### 6. Daily use
 
 ```bash
 docker start claude
