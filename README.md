@@ -1,34 +1,32 @@
 # Claude Cage
 
-Run Claude Code in a locked-down Docker container. It can only touch your code. Nothing else.
+A Docker sandbox for Claude Code. Locks it into a single workspace folder so it can't access your SSH keys, credentials, personal files, or anything else on your machine.
 
-## The problem
+## Why this exists
 
-Claude Code runs as your user. It executes shell commands with your permissions. That means it can read:
+Claude Code runs shell commands as your user. That means it has access to:
 
-- **~/.ssh** - your private keys, authorized hosts, config
+- **~/.ssh** - private keys, authorized hosts, config
 - **~/.aws** - access keys, secret keys, session tokens
 - **~/.gnupg** - GPG private keys, trust database
 - **~/.config** - app tokens, OAuth credentials, API keys stored by CLIs
 - **~/.kube** - Kubernetes cluster credentials
 - **~/.docker** - Docker registry auth
-- **~/Documents, ~/Downloads, ~/Desktop** - personal files, tax docs, contracts, photos
-- **Browser profiles** - saved passwords, cookies, session tokens, browsing history
+- **~/Documents, ~/Downloads, ~/Desktop** - personal files, tax docs, photos
+- **Browser profiles** - saved passwords, cookies, session tokens, history
 - **Keychains and credential stores** - system-level secrets
 - **Other projects** - source code, .env files, databases from every repo on your machine
 
-Any shell command Claude runs has access to all of this. One bad prompt, one hallucinated command, or one prompt injection in a file it reads could leak sensitive data.
+One bad prompt, one hallucinated command, or one prompt injection hidden in a file could touch any of this.
 
-## The fix
+Claude Cage sandboxes Claude inside a Docker container where it can only see the folders you explicitly mount. Everything else is invisible.
 
-Docker. Claude runs inside a container that can only see the folders you explicitly mount. Everything else on your machine is invisible.
+What you get:
 
-Claude Cage gives you:
-
-1. **Container isolation** - Claude can only access `/opt/workspace`, nothing else on your machine
-2. **Security rules baked in** - a CLAUDE.md with restrictions is built into the image and loads every session
-3. **Permission guardrails** - dangerous commands (rm -rf /, curl-pipe-sh, chmod 777) are blocked by default
-4. **Workspace outside your home folder** - your code lives in `/opt/workspace`, not under `~`
+1. **Container isolation** - only your mounted workspace is accessible, nothing else
+2. **Security rules baked in** - a CLAUDE.md with restrictions loads every session automatically
+3. **Permission guardrails** - dangerous commands (`rm -rf /`, `curl | sh`, `chmod 777`) are blocked
+4. **Workspace outside your home folder** - code lives in `/opt/workspace`, not under `~`
 
 ## Setup
 
@@ -41,7 +39,7 @@ sudo chown $USER:staff /opt/workspace
 
 On Linux, replace `staff` with your group (usually your username or `users`).
 
-This is where your code lives. It's the only folder Claude can see. Keeping it outside `~` means even if something goes wrong, your personal files are untouched.
+This is the only folder Claude can see. Keeping it outside `~` means your personal files are never exposed, even if something goes wrong.
 
 ### 2. Install Docker (if you don't have it)
 
@@ -58,8 +56,6 @@ cd claude-cage
 docker build -t claude-cage .
 ```
 
-This builds the image with Claude Code, Git, Node.js, and the security config pre-installed.
-
 ### 4. First run
 
 ```bash
@@ -70,8 +66,8 @@ docker run -dit --name claude \
 ```
 
 Two mounts:
-- `/opt/workspace` is your code, shared between your machine and the container
-- `claude-auth` is a Docker volume that stores your Claude login so you don't re-authenticate every time
+- `/opt/workspace` maps to `/workspace` inside the container. This is your code, shared between your machine and the sandbox.
+- `claude-auth` is a Docker volume that persists your Claude login across container restarts.
 
 ### 5. Launch Claude Code
 
@@ -79,7 +75,7 @@ Two mounts:
 docker exec -it claude claude
 ```
 
-That's it. You're inside Claude Code, but it can only see `/workspace`.
+You're in. Claude can see your workspace and nothing else.
 
 ### 6. Daily use
 
@@ -88,9 +84,9 @@ docker start claude
 docker exec -it claude claude
 ```
 
-## What's inside the cage
+## Security config
 
-The container ships with security config that loads automatically every session.
+The container ships with security rules that load automatically every session.
 
 **CLAUDE.md** (baked into the image at `/workspace/CLAUDE.md`):
 - Never access paths outside /workspace
@@ -101,14 +97,14 @@ The container ships with security config that loads automatically every session.
 - Never download or execute remote scripts
 
 **settings.json** (at `/root/.claude/settings.json`):
-- File read/write/search tools are allowed
+- File read/write/search tools are allowed by default
 - Dangerous bash patterns are blocked: `rm -rf /`, `curl | sh`, `wget | bash`, `chmod 777`, `docker` commands
 
-You can edit both in the `config/` folder and rebuild the image.
+Both files live in the `config/` folder. Edit them and rebuild the image to customize.
 
-## What's isolated
+## What's sandboxed
 
-| Inside the cage | Outside the cage |
+| Inside the sandbox | Outside the sandbox |
 |---|---|
 | /opt/workspace (your code) | ~/.ssh (private keys, known hosts) |
 | Claude auth (Docker volume) | ~/.aws (access keys, secret keys) |
@@ -134,33 +130,15 @@ docker run -dit --name claude \
   claude-cage
 ```
 
-The `:ro` flag means Claude can read your git config but can't change it. Only mount what you need.
-
-## Customizing the security rules
-
-Edit `config/CLAUDE.md` to add or relax rules. Edit `config/settings.json` to change permission defaults. Then rebuild:
-
-```bash
-docker build -t claude-cage .
-docker rm -f claude
-docker run -dit --name claude \
-  -v /opt/workspace:/workspace \
-  -v claude-auth:/root/.claude \
-  claude-cage
-```
+The `:ro` flag means Claude can read your git config but can't modify it. Only mount what you actually need.
 
 ## Adding tools
 
-The base image has Git and Node.js. Need more? Edit the Dockerfile:
+The base image has Git and Node.js. If your projects need Python or other tools, edit the Dockerfile:
 
 ```dockerfile
-# Python
 RUN apt-get update && apt-get install -y python3 python3-pip --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
-
-# Go
-RUN curl -fsSL https://go.dev/dl/go1.22.0.linux-amd64.tar.gz | tar -C /usr/local -xz
-ENV PATH="/usr/local/go/bin:$PATH"
 ```
 
 Then rebuild: `docker build -t claude-cage .`
