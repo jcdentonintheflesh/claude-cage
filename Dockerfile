@@ -9,6 +9,11 @@ RUN apt-get update && apt-get install -y \
 
 RUN npm install -g @anthropic-ai/claude-code
 
+# Security config: CLAUDE.md rules + permission settings
+# These are baked into the image so they apply to every session
+COPY config/CLAUDE.md /workspace/CLAUDE.md
+COPY config/settings.json /root/.claude/settings.json
+
 WORKDIR /workspace
 
 CMD ["claude"]
